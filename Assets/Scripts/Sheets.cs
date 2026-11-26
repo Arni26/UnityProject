@@ -315,66 +315,60 @@ public static class Sheets
         return res;
     }
 
+    static List<(int lo, int hi)> FindBands(bool[] has, int minSpan)
+    {
+        var bands = new List<(int lo, int hi)>();
+        bool inside = false;
+        int start = 0;
+        for (int i = 0; i < has.Length; i++)
+        {
+            if (has[i] && !inside) { inside = true; start = i; }
+            else if (!has[i] && inside) { inside = false; if (i - start >= minSpan) bands.Add((start, i - 1)); }
+        }
+        if (inside && has.Length - start >= minSpan) bands.Add((start, has.Length - 1));
+        return bands;
+    }
+
     static FramePixels[,] SliceZombieSheetPixels()
     {
         if (!LoadSheet("zombies.jpg", out var w, out var h, out var pix, out var fg)) return null;
-        var comps = Label(fg, w, h, 2);
 
-        // Drop top text headers and far-left "1.".."5." row indices.
-        var keep = comps.FindAll(c =>
-            c.maxy < h - 42 &&
-            !(c.cx < 46f && c.px.Count < 600) &&
-            !(c.H <= 20 && c.px.Count < 450));
-
-        var bodies = keep.FindAll(c => c.px.Count >= 550);
-        var rc = ClusterRows(bodies, 5);
-        if (rc == null) return null;
-
-        var rowCy = new float[5];
-        for (int r = 0; r < 5; r++)
+        // 1D vertical projection (skip left "1.".."5." labels) -> 5 character rows (top to bottom)
+        var rowHas = new bool[h];
+        for (int y = 0; y < h; y++)
         {
-            float s = 0f; foreach (var c in rc[r]) s += c.cy; rowCy[r] = s / rc[r].Count;
+            int cnt = 0;
+            for (int x = 46; x < w; x++) if (fg[y * w + x]) cnt++;
+            rowHas[y] = cnt >= 6;
         }
+        var yBands = FindBands(rowHas, 50);
+        if (yBands.Count < 5) { Debug.LogWarning($"Sheets: zombie Y-bands={yBands.Count}"); return null; }
+        yBands.Sort((a, b) => b.hi.CompareTo(a.hi));
+        if (yBands.Count > 5) yBands = yBands.GetRange(0, 5);
 
-        // Assign every kept component in the character bands to its nearest row, then group by X (<48px).
-        var rowBins = new List<Comp>[5];
-        for (int r = 0; r < 5; r++) rowBins[r] = new List<Comp>();
-        foreach (var c in keep)
+        // 1D horizontal projection within the 5 character rows -> 8 pose columns (left to right)
+        var colHas = new bool[w];
+        for (int x = 40; x < w; x++)
         {
-            int bestR = 0; float bestD = float.MaxValue;
+            int cnt = 0;
             for (int r = 0; r < 5; r++)
-            {
-                float d = Mathf.Abs(c.cy - rowCy[r]);
-                if (d < bestD) { bestD = d; bestR = r; }
-            }
-            if (bestD > 62f) continue;
-            rowBins[bestR].Add(c);
+                for (int y = yBands[r].lo; y <= yBands[r].hi; y++)
+                    if (fg[y * w + x]) cnt++;
+            colHas[x] = cnt >= 4;
         }
+        var xBands = FindBands(colHas, 30);
+        if (xBands.Count < 8) { Debug.LogWarning($"Sheets: zombie X-bands={xBands.Count}"); return null; }
+        if (xBands.Count > 8) xBands = xBands.GetRange(0, 8);
 
         var res = new FramePixels[5, 8];
         for (int r = 0; r < 5; r++)
         {
-            var bin = rowBins[r];
-            bin.Sort((a, b) => a.cx.CompareTo(b.cx));
-            var clusters = new List<List<Comp>>();
-            foreach (var c in bin)
+            var yb = yBands[r];
+            for (int c = 0; c < 8; c++)
             {
-                if (clusters.Count == 0) { clusters.Add(new List<Comp> { c }); continue; }
-                var prev = clusters[clusters.Count - 1];
-                float prevCx = MeanCx(prev);
-                if (Mathf.Abs(c.cx - prevCx) < 48f) prev.Add(c);
-                else clusters.Add(new List<Comp> { c });
+                var xb = xBands[c];
+                res[r, c] = PackRect(fg, pix, w, xb.lo, xb.hi, yb.lo, yb.hi);
             }
-
-            if (clusters.Count > 8)
-            {
-                clusters.Sort((a, b) => SumPx(b).CompareTo(SumPx(a)));
-                clusters = clusters.GetRange(0, 8);
-                clusters.Sort((a, b) => MeanCx(a).CompareTo(MeanCx(b)));
-            }
-
-            for (int c = 0; c < clusters.Count && c < 8; c++)
-                res[r, c] = PackComps(clusters[c], pix, w);
             for (int c = 0; c < 8; c++)
                 if (res[r, c].pix == null)
                     res[r, c] = NearestCol(res, r, c);
@@ -382,8 +376,29 @@ public static class Sheets
         return res;
     }
 
-    static float MeanCx(List<Comp> list) { float s = 0f; foreach (var c in list) s += c.cx; return s / list.Count; }
-    static int SumPx(List<Comp> list) { int s = 0; foreach (var c in list) s += c.px.Count; return s; }
+    static FramePixels PackRect(bool[] fg, Color32[] pix, int w, int x0, int x1, int y0, int y1)
+    {
+        int minx = int.MaxValue, maxx = -1, miny = int.MaxValue, maxy = -1;
+        for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1; x++)
+                if (fg[y * w + x])
+                {
+                    if (x < minx) minx = x; if (x > maxx) maxx = x;
+                    if (y < miny) miny = y; if (y > maxy) maxy = y;
+                }
+        if (maxx < minx || maxy < miny) return default;
+        int bw = maxx - minx + 1, bh = maxy - miny + 1;
+        var arr = new Color32[bw * bh];
+        for (int y = miny; y <= maxy; y++)
+            for (int x = minx; x <= maxx; x++)
+                if (fg[y * w + x])
+                {
+                    var col = pix[y * w + x]; col.a = 255;
+                    arr[(y - miny) * bw + (x - minx)] = col;
+                }
+        ClearLegGap(arr, bw, bh);
+        return new FramePixels { w = bw, h = bh, pix = arr };
+    }
 
     static FramePixels NearestCol(FramePixels[,] res, int r, int c)
     {
@@ -530,22 +545,25 @@ public static class Sheets
                 var col = pix[p]; col.a = 255;
                 arr[(p / w - miny) * bw + (p % w - minx)] = col;
             }
-        // Clear enclosed beige backdrop pocket trapped between legs and ground shadow
-        if (bh >= 45)
-        {
-            int maxY = Mathf.FloorToInt(bh * 0.42f);
-            for (int y = 0; y < maxY; y++)
-                for (int x = 0; x < bw; x++)
-                {
-                    int idx = y * bw + x;
-                    var col = arr[idx];
-                    if (col.a == 0) continue;
-                    float dist = Mathf.Abs(col.r - lastBgR) + Mathf.Abs(col.g - lastBgG) + Mathf.Abs(col.b - lastBgB);
-                    float lum = col.r * 0.299f + col.g * 0.587f + col.b * 0.114f;
-                    if (dist <= 56f && lum > 192f) arr[idx].a = 0;
-                }
-        }
+        ClearLegGap(arr, bw, bh);
         return new FramePixels { w = bw, h = bh, pix = arr };
+    }
+
+    static void ClearLegGap(Color32[] arr, int bw, int bh)
+    {
+        // Clear enclosed beige backdrop pocket trapped between legs and ground shadow
+        if (bh < 45) return;
+        int maxY = Mathf.FloorToInt(bh * 0.42f);
+        for (int y = 0; y < maxY; y++)
+            for (int x = 0; x < bw; x++)
+            {
+                int idx = y * bw + x;
+                var col = arr[idx];
+                if (col.a == 0) continue;
+                float dist = Mathf.Abs(col.r - lastBgR) + Mathf.Abs(col.g - lastBgG) + Mathf.Abs(col.b - lastBgB);
+                float lum = col.r * 0.299f + col.g * 0.587f + col.b * 0.114f;
+                if (dist <= 56f && lum > 192f) arr[idx].a = 0;
+            }
     }
 
     static Sprite PixelsToSprite(FramePixels fp)
