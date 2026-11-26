@@ -6,6 +6,8 @@
 [Bb]uilds/
 [Ll]ogs/
 [Mm]emoryCaptures/
+[Uu]ser[Ss]ettings/
+.vsconfig
 
 # Visual Studio / Rider
 .vscode/

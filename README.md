@@ -1,32 +1,41 @@
-# KBTU Outbreak (Unity 6, 2D pixel horror)
+# KBTU Outbreak (Unity 6)
 
-Open this folder in Unity Hub with Unity 6000.3.x. The Main scene is created automatically (menu `KBTU`). Press Play.
+2D пиксельный survival-horror о зомби-апокалипсисе в университете КБТУ.  
+Игрок начинает в сером подземном бункере (−1 этаж) с одной лишь дубинкой, проходит 7 этапов-головоломок по блокам КБТУ, открывает комнату Секьюрити, забирает ключ от туннеля и спасает выживших.
 
-Everything (maps, sprites, zombies, puzzles, UI) is generated from code, so the project needs no art.
-If the project opens with "Active Input Handling = Input System only", set it to "Both" (Project Settings > Player).
+## Как открыть и запустить (Unity `6000.3.28f1`)
+1. Откройте проект `C:\Users\User\.gemini\antigravity\scratch\KBTU-Outbreak` в **Unity Hub** на версии **Unity 6 (`6000.3.28f1`)**.
+2. Откройте сцену `Assets/Scenes/Main.unity` (или выберите меню **KBTU → Create Main Scene**).
+3. Нажмите **Play** (`Space` / `Enter` — начать пролог, `K` — сразу в бункер).
 
-## Story flow
-Intro > Bunker (-1) > Floor 0 hub (KB, AB, PF, TB blocks) > 7 puzzle rooms > Security (key) > Tunnel (win).
-If you die from a bite, you respawn at the previous stage (the last completed door, or the bunker).
+## Управление
+- **WASD / Стрелки** — движение (плавная физика, автоматический переворот и поочерёдная анимация шагов)
+- **Мышь + ЛКМ** — фонарик, прицел и удар / выстрел
+- **E** — действие (записки, шкафчики, терминалы, сейф, щиток, рычаги, диван, выжившие)
+- **1–4 / Колесо мыши** — смена оружия (`Дубинка`, `Пистолет`, `Дробовик`, `Автомат`)
+- **Shift** — бег (до 4 этапа) / **рывок** с неуязвимостью (после 4 этапа)
+- **H** — аптечка (после 2 этапа)
+- **G** — граната (после 7 этапа)
+- **R** — сброс ящиков / комнаты головоломки
+- **Tab / M** — архитектурная карта-схема блоков КБТУ (`KB`, `AB`, `PF`, `TB`)
+- **F8** — вкл/выкл процедурный звук
 
-## Controls
-WASD move, mouse aim, LMB attack, E interact, 1-4 / wheel weapons, G grenade, H medkit, Shift dash, R reset room.
+## 7 этапов и головоломок КБТУ
+1. **Каб. 157 — Блок AB (Жёлтый):** поиск ключа от запертого шкафчика, магнитная карта доступа, считыватель у выхода → награда: **Пистолет**.
+2. **Каб. 117 — Блок PF (Красный):** 3 записки-подсказки и ввод кбтушного кодового слова на терминале (`ПАНФИЛОВ` / `АБЫЛАЙ` / `КАЗЫБЕК` / `ТОЛЕБИ`) → награда: **Лечение (H) + аптечки**.
+3. **Каб. 726 «Абай пресс-центр» — Блок KB (Зелёный):** 3 числа по комнате и интерактивный **сейф с крутящимся лимбом** → награда: **Дробовик**.
+4. **Каб. 400Б «Кабинет Кунаева» (4 этаж, захвачен):** поиск 3 предохранителей между колоннами и запуск электрощитка → награда: **Рывок (Shift)**.
+5. **Каб. 346 — Блок TB (Синий):** передвижение тяжёлых ящиков на 3 нажимные плиты → награда: **Автомат**.
+6. **Каб. 270 — Блок AB (2 этаж, захвачен):** вспышка последовательности из 5 цветов блоков КБТУ на консоли и ввод рычагами по памяти → награда: **Броня**.
+7. **Каб. 428 — Блок KB (4 этаж, финал):** ключ → запертый шкафчик с 3-м предохранителем → щиток → терминал управления с паролем **КБТУ / KBTU** → награда: **Гранаты (G) и доступ в Секьюрити**.
 
-## Stages
-| # | Room | Puzzle | Reward |
-|---|------|--------|--------|
-| 1 | 157 AB | lever order from console | Pistol |
-| 2 | 117 PF | 3 notes > code lock | Healing skill + medkits |
-| 3 | 726 Abai press center | push crates onto plates | Shotgun |
-| 4 | 400B Kunaev | 3 fuses > fuse box | Dash |
-| 5 | 346 TB | memorize 5 colors | SMG |
-| 6 | 270 AB | 4 notes > code lock (many zombies) | Armor |
-| 7 | 428 KB | fuses + lever order | Grenades, opens Security |
+Далее: прорыв в **Секьюрити** (0 этаж, KB справа) за ключом и побег в **Туннель** (0 этаж, TB слева). При укусе до 0 HP — возрождение на предыдущем этапе.
 
-Extra "dangerous" rooms (305, 162, 25) are full of zombies, with ammo and medkits.
+## Спрайты и паки Craftpix
+Игра уже полностью работает «из коробки» на встроенных нарезанных листах (`player.jpg`, `zombies.jpg` с удалением фона и 40+40 PNG в `Assets/Resources/Sprites/`) и 16x16 бежевых заброшенных коридорах/кабинетах КБТУ.
 
-## Where to edit
-- `Areas.cs`: maps, room names, puzzle settings
-- `Game.cs`: rules, rewards, story text, UI
-- `Sprites.cs`: placeholder sprites
-- `Actors.cs`: player, zombies, weapons
+Чтобы подключить паки **Craftpix** (сайт требует входа в аккаунт перед скачиванием):
+- Распакуйте *Free Raider Sprite Sheets Pixel Art* в `Assets/StreamingAssets/Packs/Raider/` (`Raider_1`, `Raider_2`, `Raider_3`).
+- Распакуйте *Free Urban Zombie Sprite Sheet Pixel Art Pack* в `Assets/StreamingAssets/Packs/UrbanZombie/` (`Zombie_1..4`).
+
+`Sheets.cs` автоматически подхватит горизонтальные полосы и переключит анимации при следующем запуске!
