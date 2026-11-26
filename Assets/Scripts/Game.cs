@@ -738,6 +738,7 @@ public class Game : MonoBehaviour
             cp.fallFrames = z.set.fall;
             cp.deadFrames = z.set.dead;
             cp.flipX = z.faceLeft;
+            cp.tiltOnDead = z.set.tiltOnDead;
             cp.tint = def.tint;
         }
         if (UnityEngine.Random.value < 0.25f) MakePickup('a', z.transform.position, null);
@@ -761,7 +762,7 @@ public class Game : MonoBehaviour
         player.PlayClip(AnimClip.Pickup, 0.6f);
         Sfx.PlayPickup();
         if (kind == 'm') { medkits++; Msg("Аптечка +1" + (heal ? "" : " (лечение откроется после этапа 2)"), 2.5f); }
-        else if (kind == 'a') { ammo += 8; Msg("Патроны +8" + (hasW[1] ? "" : " (огнестрел скоро откроется)"), 2f); }
+        else if (kind == 'a') { ammo += 8; Msg("Патроны +8" + (hasW[1] ? (cur == 0 ? " (нажми 2–4 или колесо для огнестрела)" : "") : " (огнестрел скоро откроется)"), 2.5f); }
         else { hasKey = true; Sfx.PlayUnlock(); Msg("КЛЮЧ ОТ ТУННЕЛЯ! Беги к выходу на 0 этаже (внизу слева)!", 6f); }
     }
 
@@ -1322,7 +1323,7 @@ public class Game : MonoBehaviour
         for (int i = 1; i <= 7; i++) prog += i <= completed ? $"[{i}:OK] " : (i == completed + 1 ? $"[{i}:>>] " : $"[{i}:--] ");
         Txt(new Rect(x + 40, y + 482, 700, 32), prog, sTxt, new Color(0.75f, 1f, 0.75f), TextAnchor.MiddleCenter);
         Txt(new Rect(x + 40, y + 522, 700, 62),
-            "Управление: WASD / Стрелки — шаг   |   Мышь + ЛКМ — огонь / дубинка   |   E — действие\n1-4 / Колесо — оружие   |   Shift — бег / рывок   |   H — аптечка   |   G — граната   |   R — сброс ящиков",
+            "Управление: WASD / Стрелки — шаг   |   Мышь + ЛКМ — огонь / дубинка   |   ПКМ / F — удар дубинкой   |   E — действие\n1-4 / Колесо — оружие   |   Shift — бег / рывок   |   H — аптечка   |   G — граната   |   R — сброс ящиков",
             sSmall, new Color(0.82f, 0.82f, 0.82f), TextAnchor.MiddleCenter);
 
         if (GUI.Button(new Rect(x + 310, y + 584, 160, 36), "ЗАКРЫТЬ (Tab/Esc)", sBtn)) { Sfx.PlayClick(); state = GState.Play; }

@@ -7,6 +7,7 @@ public class AnimSet
 {
     public Sprite[] idle, walk, run, pickup, attack, shoot, victory, hurt, fall, dead;
     public float scale = 1f;
+    public bool tiltOnDead;
 }
 
 /// <summary>
@@ -220,27 +221,72 @@ public static class Sheets
     {
         var g = SliceZombieSheetPixels();
         if (g == null) return null;
-        var sets = new AnimSet[5];
+        var sp = new Sprite[5, 8];
+        for (int r = 0; r < 5; r++)
+            for (int c = 0; c < 8; c++)
+                sp[r, c] = PixelsToSprite(g[r, c]);
+        return BuildZombieSetsFromGrid(sp);
+    }
+
+    /// <summary>Map each zombie row strictly to frames belonging to that same character (avoids AI sheet crossovers).</summary>
+    static AnimSet[] BuildZombieSetsFromGrid(Sprite[,] sp)
+    {
+        var sets = new List<AnimSet>(5);
         for (int r = 0; r < 5; r++)
         {
-            var sp = new Sprite[8];
-            for (int c = 0; c < 8; c++) sp[c] = PixelsToSprite(g[r, c]);
-            sets[r] = new AnimSet
+            if (sp[r, 0] == null) continue;
+            Sprite[] walk = { sp[r, 0], sp[r, 1] ?? sp[r, 0] };
+            Sprite[] run = { sp[r, 2] ?? sp[r, 0], sp[r, 3] ?? sp[r, 2] ?? sp[r, 0] };
+            Sprite[] atk, hurt, fall, dead;
+            bool tilt = false;
+
+            switch (r)
             {
-                idle = new[] { sp[0] },
-                walk = new[] { sp[0], sp[1] },
-                run = new[] { sp[2], sp[3] },
-                attack = new[] { sp[4] },
-                shoot = new[] { sp[4] },
-                hurt = new[] { sp[5] },
-                fall = new[] { sp[6] },
-                dead = new[] { sp[7] },
-                pickup = new[] { sp[0] },
-                victory = new[] { sp[0] },
-                scale = 1f
-            };
+                case 0: // Suit boy (sp[2,7] in zombies.jpg is the matching suit boy dead pose)
+                    atk = run;
+                    hurt = new[] { sp[0, 0] };
+                    fall = new[] { sp[0, 6] ?? sp[0, 0] };
+                    dead = new[] { sp[2, 7] ?? sp[0, 6] ?? sp[0, 0] };
+                    tilt = sp[2, 7] == null;
+                    break;
+                case 1: // Black-haired girl
+                    atk = run;
+                    hurt = new[] { sp[1, 0] };
+                    fall = new[] { sp[1, 0] };
+                    dead = new[] { sp[1, 0] };
+                    tilt = true;
+                    break;
+                case 2: // Red-hoodie boy
+                    atk = new[] { sp[2, 4] ?? run[0] };
+                    hurt = new[] { sp[2, 5] ?? sp[2, 0] };
+                    fall = new[] { sp[2, 6] ?? sp[2, 0] };
+                    dead = fall;
+                    tilt = true;
+                    break;
+                case 3: // Green-cardigan girl
+                    atk = run;
+                    hurt = new[] { sp[3, 5] ?? sp[3, 0] };
+                    fall = new[] { sp[3, 6] ?? sp[3, 0] };
+                    dead = fall;
+                    tilt = true;
+                    break;
+                default: // Row 4: Denim-jacket boy
+                    atk = run;
+                    hurt = new[] { sp[4, 5] ?? sp[4, 0] };
+                    fall = new[] { sp[4, 6] ?? sp[4, 0] };
+                    dead = new[] { sp[4, 7] ?? sp[4, 6] ?? sp[4, 0] };
+                    break;
+            }
+
+            sets.Add(new AnimSet
+            {
+                idle = new[] { sp[r, 0] }, walk = walk, run = run,
+                attack = atk, shoot = atk, hurt = hurt,
+                fall = fall, dead = dead, pickup = new[] { sp[r, 0] }, victory = new[] { sp[r, 0] },
+                scale = 1f, tiltOnDead = tilt
+            });
         }
-        return sets;
+        return sets.Count > 0 ? sets.ToArray() : null;
     }
 
     static Sprite[] RowRange(Sprite[,] g, int row, int from, int to)
@@ -618,23 +664,11 @@ public static class Sheets
 
     static AnimSet[] LoadZombiesFromResources()
     {
-        var list = new List<AnimSet>();
-        for (int z = 1; z <= 5; z++)
-        {
-            Sprite G(string n) => Resources.Load<Sprite>($"Sprites/Zombie/z{z}_{n}");
-            var wl0 = G("walkL0"); if (wl0 == null) continue;
-            var wl1 = G("walkL1") ?? wl0;
-            var wr0 = G("walkR0") ?? wl0; var wr1 = G("walkR1") ?? wr0;
-            var atk = G("attack") ?? wr0; var hit = G("hit") ?? wl0;
-            var fall = G("fall") ?? hit; var dead = G("dead") ?? fall;
-            list.Add(new AnimSet
-            {
-                idle = new[] { wl0 }, walk = new[] { wl0, wl1 }, run = new[] { wr0, wr1 },
-                attack = new[] { atk }, shoot = new[] { atk }, hurt = new[] { hit },
-                fall = new[] { fall }, dead = new[] { dead }, pickup = new[] { wl0 }, victory = new[] { wl0 },
-                scale = 1f
-            });
-        }
-        return list.Count > 0 ? list.ToArray() : null;
+        string[] colNames = { "walkL0", "walkL1", "walkR0", "walkR1", "attack", "hit", "fall", "dead" };
+        var sp = new Sprite[5, 8];
+        for (int r = 0; r < 5; r++)
+            for (int c = 0; c < 8; c++)
+                sp[r, c] = Resources.Load<Sprite>($"Sprites/Zombie/z{r + 1}_{colNames[c]}");
+        return BuildZombieSetsFromGrid(sp);
     }
 }

@@ -98,7 +98,7 @@ public class GhostTrail : MonoBehaviour
 public class Corpse : MonoBehaviour
 {
     public Sprite[] fallFrames, deadFrames;
-    public bool flipX;
+    public bool flipX, tiltOnDead;
     public Color tint = Color.white;
     SpriteRenderer sr;
     float t;
@@ -111,10 +111,16 @@ public class Corpse : MonoBehaviour
     {
         if (settled || sr == null) return;
         t += Time.deltaTime;
-        if (t < FallDur && fallFrames != null && fallFrames.Length > 0)
+        float targetAng = tiltOnDead ? (flipX ? -82f : 82f) : 0f;
+        if (t < FallDur)
         {
-            int idx = Mathf.Min(fallFrames.Length - 1, Mathf.FloorToInt((t / FallDur) * fallFrames.Length));
-            sr.sprite = fallFrames[idx];
+            if (fallFrames != null && fallFrames.Length > 0)
+            {
+                int idx = Mathf.Min(fallFrames.Length - 1, Mathf.FloorToInt((t / FallDur) * fallFrames.Length));
+                sr.sprite = fallFrames[idx];
+            }
+            if (tiltOnDead)
+                transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(0f, targetAng, t / FallDur));
             sr.flipX = flipX;
             sr.color = tint;
         }
@@ -123,6 +129,7 @@ public class Corpse : MonoBehaviour
             settled = true;
             if (deadFrames != null && deadFrames.Length > 0)
                 sr.sprite = deadFrames[Random.Range(0, deadFrames.Length)];
+            if (tiltOnDead) transform.rotation = Quaternion.Euler(0f, 0f, targetAng);
             sr.flipX = flipX;
             sr.color = tint * 0.9f;
             sr.sortingOrder = -120;
@@ -304,14 +311,29 @@ public class Zombie : MonoBehaviour
 
         Sprite[] clip;
         float rate;
-        if (flashT > 0f && set.hurt != null) { clip = set.hurt; rate = 8f; }
-        else if (Time.time < atkUntil && set.attack != null) { clip = set.attack; rate = 8f; }
-        else if (mv.sqrMagnitude > 0.01f)
+        if (flashT > 0f && set.hurt != null)
         {
-            clip = (aggro && set.run != null && set.run.Length > 0) ? set.run : set.walk;
-            rate = aggro ? 7f : 4.5f;
+            clip = set.hurt; rate = 8f;
+            gfx.localRotation = Quaternion.Euler(0f, 0f, faceLeft ? -14f : 14f);
+            gfx.localScale = Vector3.one * set.scale;
         }
-        else { clip = set.idle ?? set.walk; rate = 2f; }
+        else if (Time.time < atkUntil && set.attack != null)
+        {
+            clip = set.attack; rate = 8f;
+            gfx.localRotation = Quaternion.Euler(0f, 0f, faceLeft ? 12f : -12f);
+            gfx.localScale = Vector3.one * (set.scale * 1.07f);
+        }
+        else
+        {
+            gfx.localRotation = Quaternion.identity;
+            gfx.localScale = Vector3.one * set.scale;
+            if (mv.sqrMagnitude > 0.01f)
+            {
+                clip = (aggro && set.run != null && set.run.Length > 0) ? set.run : set.walk;
+                rate = aggro ? 7f : 4.5f;
+            }
+            else { clip = set.idle ?? set.walk; rate = 2f; }
+        }
 
         if (clip != null && clip.Length > 0)
             sr.sprite = clip[(int)(Time.time * rate + phase) % clip.Length];
@@ -483,6 +505,7 @@ public class Player : MonoBehaviour
         }
 
         // Attack & abilities
+        if ((Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.F)) && Time.time > nextAtk) MeleeSwing(transform.position);
         bool fire = g.cur == 3 ? Input.GetMouseButton(0) : Input.GetMouseButtonDown(0);
         if (fire && Time.time > nextAtk) Attack();
         if (Input.GetKeyDown(KeyCode.G)) Grenade();
@@ -558,43 +581,60 @@ public class Player : MonoBehaviour
         gfx.localScale = new Vector3(set.scale, set.scale * bob, 1f);
     }
 
+    void MeleeSwing(Vector2 p)
+    {
+        nextAtk = Time.time + Cd[0];
+        PlayClip(AnimClip.Attack, 0.38f);
+        Sfx.PlayBat();
+
+        var slash = new GameObject("slash");
+        slash.transform.position = p + aim * 0.42f;
+        slash.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(aim.y, aim.x) * Mathf.Rad2Deg);
+        var ssr = slash.AddComponent<SpriteRenderer>();
+        ssr.sprite = Sprites.Get("slash");
+        ssr.sortingOrder = sr.sortingOrder + 2;
+        Destroy(slash, 0.12f);
+
+        bool landed = false;
+        foreach (var c in Physics2D.OverlapCircleAll(p + aim * 0.65f, 1.15f))
+        {
+            var z = c.GetComponent<Zombie>();
+            if (z == null) continue;
+            if (Vector2.Angle(aim, (Vector2)z.transform.position - p) < 80f)
+            {
+                z.Hurt(1.6f, aim * 6.5f);
+                landed = true;
+            }
+        }
+        if (landed) Game.I.Shake(0.08f);
+    }
+
     void Attack()
     {
         var g = Game.I;
         int w = g.cur;
-        nextAtk = Time.time + Cd[w];
         Vector2 p = transform.position;
 
-        if (w == 0)
-        {
-            PlayClip(AnimClip.Attack, 0.38f);
-            Sfx.PlayBat();
-
-            var slash = new GameObject("slash");
-            slash.transform.position = p + aim * 0.42f;
-            slash.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(aim.y, aim.x) * Mathf.Rad2Deg);
-            var ssr = slash.AddComponent<SpriteRenderer>();
-            ssr.sprite = Sprites.Get("slash");
-            ssr.sortingOrder = sr.sortingOrder + 2;
-            Destroy(slash, 0.12f);
-
-            bool landed = false;
-            foreach (var c in Physics2D.OverlapCircleAll(p + aim * 0.65f, 1.15f))
-            {
-                var z = c.GetComponent<Zombie>();
-                if (z == null) continue;
-                if (Vector2.Angle(aim, (Vector2)z.transform.position - p) < 80f)
-                {
-                    z.Hurt(1.6f, aim * 6.5f);
-                    landed = true;
-                }
-            }
-            if (landed) g.Shake(0.08f);
-            return;
-        }
+        if (w == 0) { MeleeSwing(p); return; }
 
         int cost = w == 2 ? 2 : 1;
-        if (g.ammo < cost) { g.Msg("Нет патронов!", 1f); nextAtk = Time.time + 0.4f; return; }
+        if (g.ammo < cost)
+        {
+            if (w == 2 && g.ammo >= 1 && g.hasW[1])
+            {
+                g.cur = 1; w = 1; cost = 1;
+                g.Msg("Мало патронов для дробовика — переключено на пистолет!", 2f);
+            }
+            else
+            {
+                g.cur = 0;
+                g.Msg("Патроны закончились — переключено на дубинку (рукопашка)!", 2.5f);
+                MeleeSwing(p);
+                return;
+            }
+        }
+
+        nextAtk = Time.time + Cd[w];
         g.ammo -= cost;
         PlayClip(AnimClip.Shoot, 0.18f);
         Sfx.PlayShot(w);
@@ -602,7 +642,7 @@ public class Player : MonoBehaviour
 
         int n = w == 2 ? 6 : 1;
         float spread = w == 2 ? 16f : (w == 3 ? 6f : 1.5f);
-        float dmg = w == 1 ? 2.2f : (w == 2 ? 1.25f : 1.25f);
+        float dmg = w == 1 ? 2.2f : 1.25f;
         for (int i = 0; i < n; i++)
         {
             float a = Random.Range(-spread, spread);
@@ -617,6 +657,12 @@ public class Player : MonoBehaviour
             bl.dmg = dmg;
         }
         Flash(p + aim * 0.55f, 0.7f, new Color(1f, 0.9f, 0.5f, 0.85f), 0.05f);
+
+        if (g.ammo <= 0)
+        {
+            g.cur = 0;
+            g.Msg("Патроны закончились — в руках снова дубинка!", 2.5f);
+        }
     }
 
     void Grenade()
